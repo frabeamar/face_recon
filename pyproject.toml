@@ -1,0 +1,15 @@
+[project]
+name = "face_recognition"
+version = "0.1.0"
+description = "Face recognition and processing"
+requires-python = ">=3.10"
+
+dependencies = [
+    "facenet_pytorch",
+    "keras_facenet", 
+    "insightface",
+    "opencv-python",
+    "ruff",
+    "typer",
+    "matplotlib"
+]
