@@ -3,15 +3,56 @@ import logging
 import pickle
 from collections.abc import Iterator
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
+from typing import Literal
 
 import cv2
 import numpy as np
 import tqdm
-
-from utils import Paths
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+
+
+DATA_DIR = Path.home() / "data"
+
+
+class ClusterMethod(BaseModel):
+    metric: Literal["cosine", "euclidean"]
+    min_samples: int
+
+
+@dataclass
+class Paths:
+    top_folder: Path = DATA_DIR / "edis"
+
+    def human_labels(self, method: ClusterMethod):
+        return self.top_folder / f"min_sample_{method.min_samples}_human_labels.csv"
+
+    def clustering(self, method: ClusterMethod) -> Path:
+        return self.top_folder / f"min_sample_{method.min_samples}.csv"
+
+    @cached_property
+    def cluster_folder(self) -> Path:
+        return self.top_folder / "clustered"
+
+    @cached_property
+    def dataset(self) -> Path:
+        return self.top_folder / "dataset"
+
+    @cached_property
+    def video_frame(self) -> Path:
+        return self.top_folder / "video_frames.pkl"
+
+    @cached_property
+    def images(self) -> Path:
+        return self.top_folder / "images.pkl"
+
+
+def make_dirs(paths:Paths):
+    for path in [paths.top_folder, paths.cluster_folder]:
+        path.mkdir(exist_ok=True)
 
 
 @dataclass(frozen=True)
@@ -58,14 +99,12 @@ class VideoFrame:
     frame_num: int
 
 
-def load_data():
-    edis = pickle.loads(Path("edis.pkl").read_bytes())
-    embeddings = np.array([d.embedding for e in edis for d in e.people])
-    embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
-    bbox = np.array([d.bbox for e in edis for d in e.people])
-
-    filenames = [e.filename for e in edis for d in e.people]
-    return embeddings, bbox, filenames
+def load_all_images() -> list[ImageFrame | VideoFrame]:
+    images =  pickle.loads(Paths().images.read_bytes())
+    # videos =  pickle.loads(
+    #     Paths().video_frame.read_bytes()
+    # )
+    return images
 
 
 def extract_frames_from_video(video_path: Path):
@@ -103,7 +142,9 @@ def video_reader(base_path: str) -> Iterator[tuple[Path, int]]:
 
 
 def image_reader(base_path: str) -> Iterator[Path]:
-    files = sorted(list(Path(base_path).glob("*.jpg")))
+    #glob through all image files
+    path = Path(base_path)
+    files = sorted([img for pat in ["*.jpg", "*.png",".jpeg"] for img in path.glob(pat) ])
     for file in tqdm.tqdm(files, desc="Reading_images", total=len(files)):
         yield Path(file)
 
@@ -126,3 +167,6 @@ def read_image(filename: str | Path) -> np.ndarray:
     if image is None:
         raise IOError("Failed to load image: {}".format(filename))
     return image
+
+
+make_dirs(Paths())
